@@ -233,10 +233,15 @@ local function ensureMacOSServerUnquarantined()
     local removeResult = LrTasks.execute('xattr -d com.apple.quarantine "' .. serverBinary .. '"')
     
     if removeResult == 0 then
-        log:info("ensureMacOSServerUnquarantined: unquarantine successful")
-        prefs._serverUnquarantined = true
+        local verifyResult = LrTasks.execute(checkCmd)
+        if verifyResult ~= 0 then
+            log:info("ensureMacOSServerUnquarantined: verified - quarantine attribute removed")
+            prefs._serverUnquarantined = true
+        else
+            log:warn("ensureMacOSServerUnquarantined: quarantine attribute still present after removal")
+        end
     else
-        log:warn("ensureMacOSServerUnquarantined: unquarantine failed (exit code: " .. removeResult .. ")")
+        log:warn("ensureMacOSServerUnquarantined: removal failed (exit code: " .. removeResult .. ")")
     end
 end
 
