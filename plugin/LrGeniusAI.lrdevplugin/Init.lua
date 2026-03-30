@@ -210,7 +210,7 @@ end
 
 local function ensureMacOSServerUnquarantined()
     log:info("ensureMacOSServerUnquarantined: starting")
-    log:info("ensureMacOSServerUnquarantined: MAC_ENV = " .. tostring(MAC_ENV) .. ", prefs._serverUnquarantined = " .. tostring(prefs._serverUnquarantined))
+    log:info("ensureMacOSServerUnquarantined: MAC_ENV = " .. tostring(MAC_ENV))
     
     if not MAC_ENV then 
         log:info("ensureMacOSServerUnquarantined: not macOS, skipping")
@@ -237,13 +237,12 @@ local function ensureMacOSServerUnquarantined()
     
     if checkResult ~= 0 then
         log:info("ensureMacOSServerUnquarantined: binary not quarantined, done")
-        prefs._serverUnquarantined = true
         return
     end
     
     log:info("ensureMacOSServerUnquarantined: quarantine attribute found on actual binary")
     
-    log:info("ensureMacOSServerUnquarantined: removing quarantine attribute...")
+    log:info("ensureMacOSServerUnquarantinated: removing quarantine attribute...")
     local removeCmd = 'xattr -d com.apple.quarantine "' .. serverBinary .. '" 2>&1; echo "REMOVE_EXIT:$?"'
     local removeOutput = LrTasks.execute(removeCmd)
     log:info("ensureMacOSServerUnquarantined: remove output = " .. tostring(removeOutput))
@@ -257,7 +256,6 @@ local function ensureMacOSServerUnquarantined()
         
         if verifyResult ~= 0 then
             log:info("ensureMacOSServerUnquarantined: verified - quarantine attribute removed successfully")
-            prefs._serverUnquarantined = true
         else
             log:warn("ensureMacOSServerUnquarantined: quarantine attribute still present after removal")
         end
