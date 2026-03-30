@@ -274,10 +274,17 @@ if prefs.periodicalUpdateCheck then
 end
 
 LrTasks.startAsyncTask(function()
-    ensureMacOSServerUnquarantined()
-    SearchIndexAPI.startServer()
-    if prefs.enableOpenClip then
-        SearchIndexAPI.isClipReady() -- To trigger load of the CLIP model.
+    local ok, err = pcall(ensureMacOSServerUnquarantined)
+    if not ok then
+        log:error("ensureMacOSServerUnquarantined failed: " .. tostring(err))
+    end
+    if SearchIndexAPI then
+        SearchIndexAPI.startServer()
+        if prefs.enableOpenClip then
+            SearchIndexAPI.isClipReady()
+        end
+    else
+        log:warn("SearchIndexAPI not loaded, skipping server start")
     end
 end)
 
