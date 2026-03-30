@@ -210,7 +210,6 @@ end
 
 local function ensureMacOSServerUnquarantined()
     log:info("ensureMacOSServerUnquarantined: starting")
-    log:info("ensureMacOSServerUnquarantined: MAC_ENV = " .. tostring(MAC_ENV))
     
     if not MAC_ENV then 
         log:info("ensureMacOSServerUnquarantined: not macOS, skipping")
@@ -219,7 +218,6 @@ local function ensureMacOSServerUnquarantined()
     
     local serverDir = LrPathUtils.child(LrPathUtils.parent(_PLUGIN.path), "lrgenius-server")
     local serverBinary = LrPathUtils.child(serverDir, "lrgenius-server")
-    log:info("ensureMacOSServerUnquarantined: serverDir = " .. serverDir)
     log:info("ensureMacOSServerUnquarantined: serverBinary = " .. serverBinary)
     
     if not LrFileUtils.exists(serverBinary) then
@@ -227,40 +225,32 @@ local function ensureMacOSServerUnquarantined()
         return
     end
     
-    local checkCmd = 'xattr -p com.apple.quarantine "' .. serverBinary .. '" 2>/dev/null; echo "EXIT:$?"'
-    log:info("ensureMacOSServerUnquarantined: checking quarantine with: " .. checkCmd)
-    local checkOutput = LrTasks.execute(checkCmd)
-    log:info("ensureMacOSServerUnquarantined: check output = " .. tostring(checkOutput))
-    
-    local checkResult = tonumber(string.match(checkOutput, "EXIT:(%d+)")) or -1
-    log:info("ensureMacOSServerUnquarantined: check exit code = " .. checkResult)
-    
-    if checkResult ~= 0 then
-        log:info("ensureMacOSServerUnquarantined: binary not quarantined, done")
-        return
-    end
-    
-    log:info("ensureMacOSServerUnquarantined: quarantine attribute found on actual binary")
-    
-    log:info("ensureMacOSServerUnquarantinated: removing quarantine attribute...")
-    local removeCmd = 'xattr -d com.apple.quarantine "' .. serverBinary .. '" 2>&1; echo "REMOVE_EXIT:$?"'
-    local removeOutput = LrTasks.execute(removeCmd)
-    log:info("ensureMacOSServerUnquarantined: remove output = " .. tostring(removeOutput))
-    
-    local removeResult = tonumber(string.match(removeOutput, "REMOVE_EXIT:(%d+)")) or -1
-    
-    if removeResult == 0 then
-        local verifyOutput = LrTasks.execute(checkCmd)
-        local verifyResult = tonumber(string.match(verifyOutput, "EXIT:(%d+)")) or -1
-        log:info("ensureMacOSServerUnquarantined: verify exit code = " .. verifyResult)
-        
-        if verifyResult ~= 0 then
-            log:info("ensureMacOSServerUnquarantined: verified - quarantine attribute removed successfully")
-        else
-            log:warn("ensureMacOSServerUnquarantined: quarantine attribute still present after removal")
-        end
+    local script = [[
+BIN="]] .. serverBinary .. [["
+if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then
+    xattr -d com.apple.quarantine "$BIN" 2>&1
+    if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then
+        echo "REMOVED_FAILED"
     else
-        log:warn("ensureMacOSServerUnquarantined: removal failed with exit code " .. removeResult)
+        echo "REMOVED_SUCCESS"
+    fi
+else
+    echo "NOT_QUARANTINED"
+fi
+]]
+    
+    log:info("ensureMacOSServerUnquarantined: executing unquarantine script")
+    local result = LrTasks.execute("/bin/bash -c '" .. script:gsub('"', '\\"') .. "'")
+    log:info("ensureMacOSServerUnquarantined: result = " .. tostring(result))
+    
+    local unquarantineResult = LrTasks.execute('xattr -p com.apple.quarantine "' .. serverBinary .. '" 2>/dev/null; echo "EXIT:$?"')
+    local exitCode = tonumber(string.match(unquarantineResult, "EXIT:(%d+)")) or -1
+    log:info("ensureMacOSServerUnquarantined: final verification exit code = " .. exitCode)
+    
+    if exitCode ~= 0 then
+        log:info("ensureMacOSServerUnquarantined: binary is NOT quarantined")
+    else
+        log:warn("ensureMacOSServerUnquarantined: binary still has quarantine attribute")
     end
     
     log:info("ensureMacOSServerUnquarantined: done")
@@ -274,21 +264,15 @@ if prefs.periodicalUpdateCheck then
 end
 
 LrTasks.startAsyncTask(function()
-    LrTasks.startAsyncTask(function()
-        local ok, err = pcall(ensureMacOSServerUnquarantined)
-        if not ok then
-            log:error("ensureMacOSServerUnquarantined failed: " .. tostring(err))
-        else
-            log:info("ensureMacOSServerUnquarantined completed successfully")
-        end
-    end)
+    local ok, err = pcall(ensureMacOSServerUnquarantined)
+    if not ok then
+        log:error("ensureMacOSServerUnquarantined failed: " .. tostring(err))
+    end
     if SearchIndexAPI then
         SearchIndexAPI.startServer()
         if prefs.enableOpenClip then
             SearchIndexAPI.isClipReady()
         end
-    else
-        log:warn("SearchIndexAPI not loaded, skipping server start")
     end
 end)
 
