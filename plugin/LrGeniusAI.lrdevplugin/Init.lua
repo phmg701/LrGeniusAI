@@ -217,11 +217,6 @@ local function ensureMacOSServerUnquarantined()
         return 
     end
     
-    if prefs._serverUnquarantined then 
-        log:info("ensureMacOSServerUnquarantined: already unquarantined, skipping")
-        return 
-    end
-    
     local serverDir = LrPathUtils.child(LrPathUtils.parent(_PLUGIN.path), "lrgenius-server")
     local serverBinary = LrPathUtils.child(serverDir, "lrgenius-server")
     log:info("ensureMacOSServerUnquarantined: serverDir = " .. serverDir)
@@ -241,12 +236,14 @@ local function ensureMacOSServerUnquarantined()
     log:info("ensureMacOSServerUnquarantined: check exit code = " .. checkResult)
     
     if checkResult ~= 0 then
-        log:info("ensureMacOSServerUnquarantined: binary not quarantined or not found")
+        log:info("ensureMacOSServerUnquarantined: binary not quarantined, done")
         prefs._serverUnquarantined = true
         return
     end
     
-    log:info("ensureMacOSServerUnquarantined: quarantine attribute found, removing...")
+    log:info("ensureMacOSServerUnquarantined: quarantine attribute found on actual binary")
+    
+    log:info("ensureMacOSServerUnquarantined: removing quarantine attribute...")
     local removeCmd = 'xattr -d com.apple.quarantine "' .. serverBinary .. '" 2>&1; echo "REMOVE_EXIT:$?"'
     local removeOutput = LrTasks.execute(removeCmd)
     log:info("ensureMacOSServerUnquarantined: remove output = " .. tostring(removeOutput))
