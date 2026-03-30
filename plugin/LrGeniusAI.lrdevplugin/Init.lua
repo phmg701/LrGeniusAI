@@ -209,40 +209,66 @@ function _G.JSON.assert(b, m)
 end
 
 local function ensureMacOSServerUnquarantined()
-    if not MAC_ENV then return end
-    if prefs._serverUnquarantined then return end
+    log:info("ensureMacOSServerUnquarantined: starting")
+    log:info("ensureMacOSServerUnquarantined: MAC_ENV = " .. tostring(MAC_ENV) .. ", prefs._serverUnquarantined = " .. tostring(prefs._serverUnquarantined))
+    
+    if not MAC_ENV then 
+        log:info("ensureMacOSServerUnquarantined: not macOS, skipping")
+        return 
+    end
+    
+    if prefs._serverUnquarantined then 
+        log:info("ensureMacOSServerUnquarantined: already unquarantined, skipping")
+        return 
+    end
     
     local serverDir = LrPathUtils.child(LrPathUtils.parent(_PLUGIN.path), "lrgenius-server")
     local serverBinary = LrPathUtils.child(serverDir, "lrgenius-server")
+    log:info("ensureMacOSServerUnquarantined: serverDir = " .. serverDir)
+    log:info("ensureMacOSServerUnquarantined: serverBinary = " .. serverBinary)
     
     if not LrFileUtils.exists(serverBinary) then
-        log:trace("ensureMacOSServerUnquarantined: server binary not found at " .. serverBinary)
+        log:info("ensureMacOSServerUnquarantined: server binary not found, skipping")
         return
     end
     
-    local checkCmd = 'xattr -p com.apple.quarantine "' .. serverBinary .. '" 2>/dev/null'
-    local checkResult = LrTasks.execute(checkCmd)
+    local checkCmd = 'xattr -p com.apple.quarantine "' .. serverBinary .. '" 2>/dev/null; echo "EXIT:$?"'
+    log:info("ensureMacOSServerUnquarantined: checking quarantine with: " .. checkCmd)
+    local checkOutput = LrTasks.execute(checkCmd)
+    log:info("ensureMacOSServerUnquarantined: check output = " .. tostring(checkOutput))
+    
+    local checkResult = tonumber(string.match(checkOutput, "EXIT:(%d+)")) or -1
+    log:info("ensureMacOSServerUnquarantined: check exit code = " .. checkResult)
     
     if checkResult ~= 0 then
-        log:trace("ensureMacOSServerUnquarantined: binary not quarantined (xattr check exit code: " .. checkResult .. ")")
+        log:info("ensureMacOSServerUnquarantined: binary not quarantined or not found")
         prefs._serverUnquarantined = true
         return
     end
     
-    log:info("ensureMacOSServerUnquarantined: removing Gatekeeper quarantine from " .. serverBinary)
-    local removeResult = LrTasks.execute('xattr -d com.apple.quarantine "' .. serverBinary .. '"')
+    log:info("ensureMacOSServerUnquarantined: quarantine attribute found, removing...")
+    local removeCmd = 'xattr -d com.apple.quarantine "' .. serverBinary .. '" 2>&1; echo "REMOVE_EXIT:$?"'
+    local removeOutput = LrTasks.execute(removeCmd)
+    log:info("ensureMacOSServerUnquarantined: remove output = " .. tostring(removeOutput))
+    
+    local removeResult = tonumber(string.match(removeOutput, "REMOVE_EXIT:(%d+)")) or -1
     
     if removeResult == 0 then
-        local verifyResult = LrTasks.execute(checkCmd)
+        local verifyOutput = LrTasks.execute(checkCmd)
+        local verifyResult = tonumber(string.match(verifyOutput, "EXIT:(%d+)")) or -1
+        log:info("ensureMacOSServerUnquarantined: verify exit code = " .. verifyResult)
+        
         if verifyResult ~= 0 then
-            log:info("ensureMacOSServerUnquarantined: verified - quarantine attribute removed")
+            log:info("ensureMacOSServerUnquarantined: verified - quarantine attribute removed successfully")
             prefs._serverUnquarantined = true
         else
             log:warn("ensureMacOSServerUnquarantined: quarantine attribute still present after removal")
         end
     else
-        log:warn("ensureMacOSServerUnquarantined: removal failed (exit code: " .. removeResult .. ")")
+        log:warn("ensureMacOSServerUnquarantined: removal failed with exit code " .. removeResult)
     end
+    
+    log:info("ensureMacOSServerUnquarantined: done")
 end
 
 if prefs.periodicalUpdateCheck then
