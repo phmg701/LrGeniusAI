@@ -274,10 +274,14 @@ if prefs.periodicalUpdateCheck then
 end
 
 LrTasks.startAsyncTask(function()
-    local ok, err = pcall(ensureMacOSServerUnquarantined)
-    if not ok then
-        log:error("ensureMacOSServerUnquarantined failed: " .. tostring(err))
-    end
+    LrTasks.startAsyncTask(function()
+        local ok, err = pcall(ensureMacOSServerUnquarantined)
+        if not ok then
+            log:error("ensureMacOSServerUnquarantined failed: " .. tostring(err))
+        else
+            log:info("ensureMacOSServerUnquarantined completed successfully")
+        end
+    end)
     if SearchIndexAPI then
         SearchIndexAPI.startServer()
         if prefs.enableOpenClip then
