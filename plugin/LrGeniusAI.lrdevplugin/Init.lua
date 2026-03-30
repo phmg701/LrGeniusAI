@@ -225,32 +225,38 @@ local function ensureMacOSServerUnquarantined()
         return
     end
     
-    local script = [[
-BIN="]] .. serverBinary .. [["
-if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then
-    xattr -d com.apple.quarantine "$BIN" 2>&1
-    if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then
-        echo "REMOVED_FAILED"
-    else
-        echo "REMOVED_SUCCESS"
-    fi
-else
-    echo "NOT_QUARANTINED"
-fi
-]]
+    local escapedBinary = serverBinary:gsub('"', '\\"')
+    local script = 'BIN="' .. escapedBinary .. '"\n'
+    script = script .. 'if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then\n'
+    script = script .. '    xattr -d com.apple.quarantine "$BIN" 2>&1\n'
+    script = script .. '    if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then\n'
+    script = script .. '        echo "REMOVED_FAILED"\n'
+    script = script .. '    else\n'
+    script = script .. '        echo "REMOVED_SUCCESS"\n'
+    script = script .. '    fi\n'
+    script = script .. 'else\n'
+    script = script .. '    echo "NOT_QUARANTINED"\n'
+    script = script .. 'fi\n'
     
-    log:info("ensureMacOSServerUnquarantined: executing unquarantine script")
-    local result = LrTasks.execute("/bin/bash -c '" .. script:gsub('"', '\\"') .. "'")
+    log:info("ensureMacOSServerUnquarantined: executing via io.popen")
+    local handle = io.popen(script, "r")
+    if not handle then
+        log:error("ensureMacOSServerUnquarantined: io.popen failed")
+        return
+    end
+    local result = handle:read("*a")
+    handle:close()
+    result = result:gsub("%s+$", "")
     log:info("ensureMacOSServerUnquarantined: result = " .. tostring(result))
     
-    local unquarantineResult = LrTasks.execute('xattr -p com.apple.quarantine "' .. serverBinary .. '" 2>/dev/null; echo "EXIT:$?"')
-    local exitCode = tonumber(string.match(unquarantineResult, "EXIT:(%d+)")) or -1
-    log:info("ensureMacOSServerUnquarantined: final verification exit code = " .. exitCode)
-    
-    if exitCode ~= 0 then
-        log:info("ensureMacOSServerUnquarantined: binary is NOT quarantined")
+    if result == "NOT_QUARANTINED" then
+        log:info("ensureMacOSServerUnquarantined: binary not quarantined")
+    elseif result == "REMOVED_SUCCESS" then
+        log:info("ensureMacOSServerUnquarantined: quarantine removed successfully")
+    elseif result == "REMOVED_FAILED" then
+        log:warn("ensureMacOSServerUnquarantined: removal reported failed")
     else
-        log:warn("ensureMacOSServerUnquarantined: binary still has quarantine attribute")
+        log:warn("ensureMacOSServerUnquarantined: unexpected result: " .. tostring(result))
     end
     
     log:info("ensureMacOSServerUnquarantined: done")
