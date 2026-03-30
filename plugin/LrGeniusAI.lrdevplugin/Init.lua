@@ -208,6 +208,38 @@ function _G.JSON.assert(b, m)
     LrDialogs.showError("Error decoding JSON response.")
 end
 
+local function ensureMacOSServerUnquarantined()
+    if not MAC_ENV then return end
+    if prefs._serverUnquarantined then return end
+    
+    local serverDir = LrPathUtils.child(LrPathUtils.parent(_PLUGIN.path), "lrgenius-server")
+    local serverBinary = LrPathUtils.child(serverDir, "lrgenius-server")
+    
+    if not LrFileUtils.exists(serverBinary) then
+        log:trace("ensureMacOSServerUnquarantined: server binary not found at " .. serverBinary)
+        return
+    end
+    
+    local checkCmd = 'xattr -p com.apple.quarantine "' .. serverBinary .. '" 2>/dev/null'
+    local checkResult = LrTasks.execute(checkCmd)
+    
+    if checkResult ~= 0 then
+        log:trace("ensureMacOSServerUnquarantined: binary not quarantined (xattr check exit code: " .. checkResult .. ")")
+        prefs._serverUnquarantined = true
+        return
+    end
+    
+    log:info("ensureMacOSServerUnquarantined: removing Gatekeeper quarantine from " .. serverBinary)
+    local removeResult = LrTasks.execute('xattr -d com.apple.quarantine "' .. serverBinary .. '"')
+    
+    if removeResult == 0 then
+        log:info("ensureMacOSServerUnquarantined: unquarantine successful")
+        prefs._serverUnquarantined = true
+    else
+        log:warn("ensureMacOSServerUnquarantined: unquarantine failed (exit code: " .. removeResult .. ")")
+    end
+end
+
 if prefs.periodicalUpdateCheck then
     LrTasks.startAsyncTask(function()
         -- Check for updates in the background
@@ -216,6 +248,7 @@ if prefs.periodicalUpdateCheck then
 end
 
 LrTasks.startAsyncTask(function()
+    ensureMacOSServerUnquarantined()
     SearchIndexAPI.startServer()
     if prefs.enableOpenClip then
         SearchIndexAPI.isClipReady() -- To trigger load of the CLIP model.
