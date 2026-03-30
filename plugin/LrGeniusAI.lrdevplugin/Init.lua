@@ -209,10 +209,21 @@ function _G.JSON.assert(b, m)
 end
 
 local function ensureMacOSServerUnquarantined()
-    if not MAC_ENV then return end
+    log:info("ensureMacOSServerUnquarantined: starting")
     
-    local serverBinary = LrPathUtils.child(LrPathUtils.parent(_PLUGIN.path), "lrgenius-server")
-    if not LrFileUtils.exists(serverBinary) then return end
+    if not MAC_ENV then 
+        log:info("ensureMacOSServerUnquarantined: not macOS, skipping")
+        return 
+    end
+    
+    local serverDir = LrPathUtils.child(LrPathUtils.parent(_PLUGIN.path), "lrgenius-server")
+    local serverBinary = LrPathUtils.child(serverDir, "lrgenius-server")
+    log:info("ensureMacOSServerUnquarantined: serverBinary = " .. serverBinary)
+    
+    if not LrFileUtils.exists(serverBinary) then
+        log:info("ensureMacOSServerUnquarantined: server binary not found, skipping")
+        return
+    end
     
     local escapedBinary = serverBinary:gsub('"', '\\"')
     local script = 'BIN="' .. escapedBinary .. '"\n'
@@ -227,23 +238,28 @@ local function ensureMacOSServerUnquarantined()
     script = script .. '    echo "NOT_QUARANTINED"\n'
     script = script .. 'fi\n'
     
+    log:info("ensureMacOSServerUnquarantined: executing via io.popen")
     local handle = io.popen(script, "r")
     if not handle then
-        log:error("Unquarantine: io.popen failed")
+        log:error("ensureMacOSServerUnquarantined: io.popen failed")
         return
     end
-    local result = handle:read("*a"):gsub("%s+$", "")
+    local result = handle:read("*a")
     handle:close()
+    result = result:gsub("%s+$", "")
+    log:info("ensureMacOSServerUnquarantined: result = " .. tostring(result))
     
     if result == "NOT_QUARANTINED" then
-        log:info("Unquarantine: not quarantined")
+        log:info("ensureMacOSServerUnquarantined: binary not quarantined")
     elseif result == "REMOVED_SUCCESS" then
-        log:info("Unquarantine: removed successfully")
+        log:info("ensureMacOSServerUnquarantined: quarantine removed successfully")
     elseif result == "REMOVED_FAILED" then
-        log:warn("Unquarantine: failed")
+        log:warn("ensureMacOSServerUnquarantined: removal reported failed")
     else
-        log:warn("Unquarantine: unexpected result: " .. result)
+        log:warn("ensureMacOSServerUnquarantined: unexpected result: " .. tostring(result))
     end
+    
+    log:info("ensureMacOSServerUnquarantined: done")
 end
 
 if prefs.periodicalUpdateCheck then
