@@ -15,7 +15,7 @@
          when it can, but /Library/Logs is root:wheel and this is a LaunchAgent
          running as the logged-in user, so once a disk cleaner deletes
          /Library/Logs/LrGeniusAI nobody but root can put it back. launchd then
-         refuses to spawn the job at all -- EX_CONFIG (78) -- and the server
+         refuses to spawn the job at all  EX_CONFIG (78) and the server
          never runs, which is a hard failure to pay for a missing log file.
 
          Redirecting from a shell instead lets us fall back to
