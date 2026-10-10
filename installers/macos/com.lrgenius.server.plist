@@ -4,6 +4,11 @@
 <dict>
     <key>Label</key>
     <string>com.lrgenius.server</string>
+    <key>CFBundleDisplayName</key>
+    <string>LrGeniusAI Server</string>
+    <key>CFBundleName</key>
+    <string>LrGeniusAI Server</string>
+
 
     <!-- Deliberately not StandardOutPath/StandardErrorPath. launchd opens
          those before it execs the program: it will create a missing directory
